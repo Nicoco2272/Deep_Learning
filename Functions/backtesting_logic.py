@@ -1,5 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
+from metrics import calculo_metricas , imprimir_metricas
 
 def ejecutar_backtesting(data_indicadores: pd.DataFrame) -> float:
 
@@ -15,6 +17,8 @@ def ejecutar_backtesting(data_indicadores: pd.DataFrame) -> float:
     active_short_positions = None
     wins = 0
     losses = 0
+
+    returns = []
 
     for _, row in data_indicadores.iterrows():
         # Cierre de posiciones
@@ -41,19 +45,20 @@ def ejecutar_backtesting(data_indicadores: pd.DataFrame) -> float:
                 active_short_positions = None
                 wins += 1
 
-        # Apertura de posiciones
-        if row.RSI_BUY and active_long_positions is None:
+        long_signals = [row.RSI_BUY, row.BB_BUY, row.MACD_BUY]
+        short_signals = [row.RSI_SELL, row.BB_SELL, row.MACD_SELL]
+
+        if sum(long_signals) >= 2 and active_long_positions is None:
             cost = row.Close * n_shares * (1 + com)
             if capital > cost:
                 capital -= cost
                 active_long_positions = {
                     "datetime": row.Datetime,
                     "opened_at": row.Close,
-                    "take_profit": row.Close * (1 + take_profit),
-                    "stop_loss": row.Close * (1 - stop_loss)
+                    "take_profit": row.Close * (1+ take_profit),
+                    "stop_loss": row.Close * (1- stop_loss)
                 }
-
-        if row.RSI_SELL and active_short_positions is None:
+        if sum(short_signals) >= 2 and active_short_positions is None:
             entry_amount = row.Close * n_shares
             commission_cost = entry_amount * com
             if capital > commission_cost:
@@ -66,26 +71,32 @@ def ejecutar_backtesting(data_indicadores: pd.DataFrame) -> float:
                     "stop_loss": row.Close * (1 + stop_loss)
                 }
 
-        # Calcular valor del portafolio
         long_value = row.Close * n_shares if active_long_positions else 0
         short_value = (active_short_positions["entry_amount"] - (row.Close * n_shares)) if active_short_positions else 0
-        portfolio_value.append(capital + long_value + short_value)
+        total_value = capital + long_value + short_value
+        portfolio_value.append(total_value)
 
-    # --- Graficar evolución del portafolio y precio ---
-    fig, ax = plt.subplots(1, 1, figsize=(12, 6))
-    ax.plot(portfolio_value, label="Portfolio Value")
-    ax.set_title("Evolución del Portafolio vs Precio del Activo")
-    ax.set_ylabel("Valor del Portafolio")
-    ax.legend(loc="upper left")
+        returns.append((total_value - portfolio_value[-2]) / portfolio_value[-2])
 
-    ax2 = ax.twinx()
-    ax2.plot(data_indicadores["Close"].values, color="C1", alpha=0.5, label="Precio Close")
-    ax2.set_ylabel("Precio del Activo")
+        # Cálculo de métricas
+        sharpe, sortino, calmar = calculo_metricas(returns, portfolio_value)
+        imprimir_metricas(sharpe, sortino, calmar, wins, losses)
 
-    fig.legend(loc="upper right")
-    plt.tight_layout()
-    plt.show()
+        #Gráfica
+        fig, ax = plt.subplots(1, 1, figsize=(12,6))
+        ax.plot(portfolio_value, label = "Portfolio Value")
+        ax.set_title("Evolución del portafolio vs Precio del activo")
+        ax.set_ylabel("Valor del portafolio")
+        ax.legend(loc = "upper left")
 
-    return portfolio_value[-1]
+        ax2 = ax.twinx()
+        ax2.plot(data_indicadores["Close"].values, color = "C1", alpha=0.5, label="Precio Close")
+        ax2.set_ylabel("Precio del activo")
+
+        fig.legend(loc = "upper right")
+        plt.tight_layout()
+        plt.show()
+
+        return portfolio_value[-1]
 
 
