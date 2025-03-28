@@ -6,7 +6,7 @@ def ejecutar_backtesting_w_params(data_indicadores: pd.DataFrame) -> dict:
     # --- Parámetros de estrategia ---
     capital = 1_000_000
     com = 0.125 / 100
-    stop_loss = 0.15286820506904056
+    stop_loss = 0.15286820506904056  #Movimos manualmente los parametros de stop_loss, take_profit y n_shares
     take_profit = 0.06761982474536135
     n_shares = 3500
 

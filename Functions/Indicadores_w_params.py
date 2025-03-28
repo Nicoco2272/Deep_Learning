@@ -7,7 +7,7 @@ import ta.volatility
 
 def indicadores_w_params(data: pd.DataFrame) -> pd.DataFrame:
 
-    rsi = ta.momentum.RSIIndicator(data.Close, window=88)  # Ajustable por optimización
+    rsi = ta.momentum.RSIIndicator(data.Close, window=88)  # #Movimos manualmente los parametros de window, RSI_BUY, RSI_SELL
     bb = ta.volatility.BollingerBands(data.Close, window=15, window_dev=2)
     macd = ta.trend.MACD(data.Close)
 
