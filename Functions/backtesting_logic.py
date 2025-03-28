@@ -1,10 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import numpy as np
-from metrics import calculo_metricas , imprimir_metricas
 
 def ejecutar_backtesting(data_indicadores: pd.DataFrame) -> float:
-
     # --- Parámetros de estrategia ---
     capital = 1_000_000
     com = 0.125 / 100
@@ -18,10 +15,8 @@ def ejecutar_backtesting(data_indicadores: pd.DataFrame) -> float:
     wins = 0
     losses = 0
 
-    returns = []
-
     for _, row in data_indicadores.iterrows():
-        # Cierre de posiciones
+        # Cierre de posiciones largas
         if active_long_positions:
             if row.Close < active_long_positions["stop_loss"]:
                 capital += row.Close * n_shares * (1 - com)
@@ -32,6 +27,7 @@ def ejecutar_backtesting(data_indicadores: pd.DataFrame) -> float:
                 active_long_positions = None
                 wins += 1
 
+        # Cierre de posiciones cortas
         if active_short_positions:
             exit_amount = row.Close * n_shares
             pnl = active_short_positions["entry_amount"] - exit_amount
@@ -45,20 +41,24 @@ def ejecutar_backtesting(data_indicadores: pd.DataFrame) -> float:
                 active_short_positions = None
                 wins += 1
 
-        long_signals = [row.RSI_BUY, row.BB_BUY, row.MACD_BUY]
-        short_signals = [row.RSI_SELL, row.BB_SELL, row.MACD_SELL]
+        # --- Señales combinadas ---
+        buy_signals = sum([row.RSI_BUY, row.BB_BUY, row.MACD_BUY])
+        sell_signals = sum([row.RSI_SELL, row.BB_SELL, row.MACD_SELL])
 
-        if sum(long_signals) >= 2 and active_long_positions is None:
+        # Abrir posición larga (BUY)
+        if buy_signals >= 2 and active_long_positions is None:
             cost = row.Close * n_shares * (1 + com)
             if capital > cost:
                 capital -= cost
                 active_long_positions = {
                     "datetime": row.Datetime,
                     "opened_at": row.Close,
-                    "take_profit": row.Close * (1+ take_profit),
-                    "stop_loss": row.Close * (1- stop_loss)
+                    "take_profit": row.Close * (1 + take_profit),
+                    "stop_loss": row.Close * (1 - stop_loss)
                 }
-        if sum(short_signals) >= 2 and active_short_positions is None:
+
+        # Abrir posición corta (SELL)
+        if sell_signals >= 2 and active_short_positions is None:
             entry_amount = row.Close * n_shares
             commission_cost = entry_amount * com
             if capital > commission_cost:
@@ -71,32 +71,25 @@ def ejecutar_backtesting(data_indicadores: pd.DataFrame) -> float:
                     "stop_loss": row.Close * (1 + stop_loss)
                 }
 
+        # Valor actual del portafolio
         long_value = row.Close * n_shares if active_long_positions else 0
         short_value = (active_short_positions["entry_amount"] - (row.Close * n_shares)) if active_short_positions else 0
-        total_value = capital + long_value + short_value
-        portfolio_value.append(total_value)
+        portfolio_value.append(capital + long_value + short_value)
 
-        returns.append((total_value - portfolio_value[-2]) / portfolio_value[-2])
+    # --- Gráfico del portafolio ---
+    fig, ax = plt.subplots(1, 1, figsize=(12, 6))
+    ax.plot(portfolio_value, label="Portfolio Value")
+    ax.set_title("Evolución del Portafolio vs Precio del Activo")
+    ax.set_ylabel("Valor del Portafolio")
+    ax.legend(loc="upper left")
 
-        # Cálculo de métricas
-        sharpe, sortino, calmar = calculo_metricas(returns, portfolio_value)
-        imprimir_metricas(sharpe, sortino, calmar, wins, losses)
+    ax2 = ax.twinx()
+    ax2.plot(data_indicadores["Close"].values, color="C1", alpha=0.5, label="Precio Close")
+    ax2.set_ylabel("Precio del Activo")
 
-        #Gráfica
-        fig, ax = plt.subplots(1, 1, figsize=(12,6))
-        ax.plot(portfolio_value, label = "Portfolio Value")
-        ax.set_title("Evolución del portafolio vs Precio del activo")
-        ax.set_ylabel("Valor del portafolio")
-        ax.legend(loc = "upper left")
+    fig.legend(loc="upper right")
+    plt.tight_layout()
+    plt.show()
 
-        ax2 = ax.twinx()
-        ax2.plot(data_indicadores["Close"].values, color = "C1", alpha=0.5, label="Precio Close")
-        ax2.set_ylabel("Precio del activo")
-
-        fig.legend(loc = "upper right")
-        plt.tight_layout()
-        plt.show()
-
-        return portfolio_value[-1]
-
+    return portfolio_value[-1]
 
