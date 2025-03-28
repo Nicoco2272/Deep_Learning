@@ -1,16 +1,14 @@
 import pandas as pd
 import numpy as np
-import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 
-def ejecutar_backtesting(data_indicadores: pd.DataFrame) -> dict:
+def ejecutar_backtesting_w_params(data_indicadores: pd.DataFrame) -> dict:
     # --- Parámetros de estrategia ---
     capital = 1_000_000
     com = 0.125 / 100
-    stop_loss = 0.05
-    take_profit = 0.05
-    n_shares = 1000
+    stop_loss = 0.15286820506904056
+    take_profit = 0.06761982474536135
+    n_shares = 3500
 
     portfolio_value = [capital]
     active_long_positions = None
@@ -87,14 +85,11 @@ def ejecutar_backtesting(data_indicadores: pd.DataFrame) -> dict:
     downside_returns = returns[returns < 0]
     sortino = np.mean(returns) / np.std(downside_returns) if len(downside_returns) > 0 else 0
 
+    # Calmar Ratio con drawdown relativo
     running_max = np.maximum.accumulate(portfolio)
-    drawdowns = running_max - portfolio
+    drawdowns = (running_max - portfolio) / running_max  # relativo (%)
     max_drawdown = np.max(drawdowns)
-
-    if max_drawdown > 0:
-        calmar = np.mean(returns) / max_drawdown
-    else:
-        calmar = 0
+    calmar = np.mean(returns) / max_drawdown if max_drawdown > 0 else 0
 
     total_trades = wins + losses
     win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
@@ -106,13 +101,12 @@ def ejecutar_backtesting(data_indicadores: pd.DataFrame) -> dict:
     calmar *= scaling_factor
 
     # --- Mostrar métricas ---
-    print("📊 Métricas de desempeño")
+    print("Métricas de desempeño")
     print(f"Final Portfolio Value: ${portfolio[-1]:,.2f}")
     print(f"Sharpe Ratio (anualizado): {sharpe:.3f}")
     print(f"Sortino Ratio (anualizado): {sortino:.3f}")
     print(f"Calmar Ratio (anualizado): {calmar:.3f}")
     print(f"Win Rate: {win_rate:.2f}%")
-    print(f"Max Drawdown: {max_drawdown:.2f}")
     print(f"Wins: {wins}, Losses: {losses}, Total Trades: {total_trades}")
 
     # --- Gráfico del portafolio ---
