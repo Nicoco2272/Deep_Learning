@@ -5,9 +5,9 @@ def ejecutar_backtesting(data_indicadores: pd.DataFrame) -> float:
     # --- Parámetros de estrategia ---
     capital = 1_000_000
     com = 0.125 / 100
-    stop_loss = 0.05
-    take_profit = 0.05
-    n_shares = 1000
+    stop_loss = 0.05011162755270379
+    take_profit = 0.09302574112333775
+    n_shares = 3500
 
     portfolio_value = [capital]
     active_long_positions = None

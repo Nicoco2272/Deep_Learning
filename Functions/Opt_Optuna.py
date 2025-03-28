@@ -14,41 +14,69 @@ def objective_func(trial, data: pd.DataFrame) -> float:
     # Indicadores técnicos
     rsi = ta.momentum.RSIIndicator(data.Close, window=rsi_window)
     bb = ta.volatility.BollingerBands(data.Close, window=15, window_dev=2)
+    macd = ta.trend.MACD(data.Close)
 
     dataset = data.copy()
     dataset["RSI"] = rsi.rsi()
     dataset["BB"] = bb.bollinger_mavg()
+    dataset["MACD"] = macd.macd()
+    dataset["MACD_SIGNAL"] = macd.macd_signal()
+
+    # Señales RSI
     dataset["RSI_BUY"] = dataset["RSI"] < rsi_lower
     dataset["RSI_SELL"] = dataset["RSI"] > rsi_upper
+
+    # Señales BB
     dataset["BB_BUY"] = bb.bollinger_lband_indicator().astype(bool)
     dataset["BB_SELL"] = bb.bollinger_hband_indicator().astype(bool)
+
+    # Señales MACD
+    dataset["MACD_BUY"] = macd.macd_diff() > 0
+    dataset["MACD_SELL"] = macd.macd_diff() < 0
+
     dataset = dataset.dropna()
 
-    # Parámetros fijos de la estrategia
+    # --- Estrategia de backtesting ---
     capital = 1_000_000
     com = 0.125 / 100
     portfolio_value = [capital]
     active_long_positions = None
     active_short_positions = None
+    wins = 0
+    losses = 0
 
     for _, row in dataset.iterrows():
-        # Cerrar posiciones largas
+        # Cierre de posiciones largas
         if active_long_positions:
-            if row.Close < active_long_positions["stop_loss"] or row.Close > active_long_positions["take_profit"]:
+            if row.Close < active_long_positions["stop_loss"]:
                 capital += row.Close * n_shares * (1 - com)
                 active_long_positions = None
+                losses += 1
+            elif row.Close > active_long_positions["take_profit"]:
+                capital += row.Close * n_shares * (1 - com)
+                active_long_positions = None
+                wins += 1
 
-        # Cerrar posiciones cortas
+        # Cierre de posiciones cortas
         if active_short_positions:
             exit_amount = row.Close * n_shares
             pnl = active_short_positions["entry_amount"] - exit_amount
             pnl -= exit_amount * com
-            if row.Close > active_short_positions["stop_loss"] or row.Close < active_short_positions["take_profit"]:
+            if row.Close > active_short_positions["stop_loss"]:
                 capital += pnl
                 active_short_positions = None
+                losses += 1
+            elif row.Close < active_short_positions["take_profit"]:
+                capital += pnl
+                active_short_positions = None
+                wins += 1
 
-        # Abrir posición larga
-        if row.RSI_BUY and active_long_positions is None:
+        # Señales combinadas
+        buy_signals = sum([row.RSI_BUY, row.BB_BUY, row.MACD_BUY])
+        sell_signals = sum([row.RSI_SELL, row.BB_SELL, row.MACD_SELL])
+
+        # Abrir posición larga (BUY)
+        if buy_signals >= 2 and active_long_positions is None:
             cost = row.Close * n_shares * (1 + com)
             if capital > cost:
                 capital -= cost
@@ -59,8 +87,8 @@ def objective_func(trial, data: pd.DataFrame) -> float:
                     "stop_loss": row.Close * (1 - stop_loss)
                 }
 
-        # Abrir posición corta
-        if row.RSI_SELL and active_short_positions is None:
+        # Abrir posición corta (SELL)
+        if sell_signals >= 2 and active_short_positions is None:
             entry_amount = row.Close * n_shares
             commission_cost = entry_amount * com
             if capital > commission_cost:
@@ -79,7 +107,6 @@ def objective_func(trial, data: pd.DataFrame) -> float:
         portfolio_value.append(capital + long_value + short_value)
 
     return portfolio_value[-1]
-
 
 def run_optimizacion(data: pd.DataFrame):
 
